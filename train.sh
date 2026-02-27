@@ -1,6 +1,6 @@
 #!/bin/bash
 
-EXP_NAME="baseline25"
+EXP_NAME="base_adapter"
 
 # train stage 1
 python train.py \
@@ -15,8 +15,8 @@ python train.py \
     --stage1_learning_rate 0.00005 \
     --stage1_lr_decay_step 2 \
     --stage1_lr_decay_factor 0.7 \
-    --WSGM_count 4 \
-    --WSGM_reduction_factor 4 \
+    --Adapter_count 3 \
+    --Adapter_reduction_factor 4 \
     --stage2_batch_size 16 \
     --stage2_epochs 10 \
     --stage2_learning_rate 0.0000025 \
@@ -33,8 +33,8 @@ python evaluate.py \
     --experiment_name ${EXP_NAME} \
     --eval_data_root ~/dataset/forgelens/GenImage/test \
     --eval_stage 1 \
-    --WSGM_count 4 \
-    --WSGM_reduction_factor 4 \
+    --Adapter_count 3 \
+    --Adapter_reduction_factor 4 \
     --FAFormer_layers 2 \
     --FAFormer_reduction_factor 1 \
     --FAFormer_head 2 \

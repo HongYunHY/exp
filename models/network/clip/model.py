@@ -44,6 +44,27 @@ class WSGM(nn.Module):
         x = self.up(x)
         return x
 
+# basic adapter
+class BasicAdapter(nn.Module):
+    def __init__(self, input_dim, adapter_dim):
+        super(BasicAdapter, self).__init__()
+        self.down = nn.Linear(input_dim, adapter_dim)
+        self.relu = nn.ReLU()
+        self.up = nn.Linear(adapter_dim, input_dim)
+        self._initialize_weights()
+
+    def _initialize_weights(self):
+        nn.init.normal_(self.down.weight, mean=0.0, std=0.01)
+        nn.init.constant_(self.down.bias, 0)
+        nn.init.normal_(self.up.weight, mean=0.0, std=0.01)
+        nn.init.constant_(self.up.bias, 0)
+
+    def forward(self, x):
+        x = self.down(x)
+        x = self.relu(x)
+        x = self.up(x)
+        return x
+
 
 # original CLIP code -----------------------------------------
 
@@ -208,7 +229,7 @@ class QuickGELU(nn.Module):
         return x * torch.sigmoid(1.702 * x)
 
 class ResidualAttentionBlock(nn.Module):
-    def __init__(self, d_model: int, n_head: int, attn_mask: torch.Tensor = None, use_wsgm: bool = False, wsgm_module: nn.Module = None):
+    def __init__(self, d_model: int, n_head: int, attn_mask: torch.Tensor = None, use_adapter: bool = False, adapter_module: nn.Module = None):
         super().__init__()
         self.attn = nn.MultiheadAttention(d_model, n_head)
         self.ln_1 = LayerNorm(d_model)
@@ -219,8 +240,8 @@ class ResidualAttentionBlock(nn.Module):
         ]))
         self.ln_2 = LayerNorm(d_model)
         self.attn_mask = attn_mask
-        self.use_wsgm = use_wsgm
-        self.wsgm_module = wsgm_module
+        self.use_adapter = use_adapter
+        self.adapter_module = adapter_module
 
     def attention(self, x: torch.Tensor):
         self.attn_mask = self.attn_mask.to(dtype=x.dtype, device=x.device) if self.attn_mask is not None else None
@@ -228,28 +249,28 @@ class ResidualAttentionBlock(nn.Module):
 
     def forward(self, x: torch.Tensor):
         x = x + self.attention(self.ln_1(x))
-        if self.use_wsgm and self.wsgm_module is not None:
-            x = x + self.wsgm_module(x)
+        if self.use_adapter and self.adapter_module is not None:
+            x = x + self.adapter_module(x)
         x = x + self.mlp(self.ln_2(x))
         return x
 
 
 class Transformer(nn.Module):
-    def __init__(self, width: int, layers: int, heads: int, attn_mask: torch.Tensor = None, num_wsgm_modules: int = 8,
+    def __init__(self, width: int, layers: int, heads: int, attn_mask: torch.Tensor = None, num_adapter_modules: int = 3,
                  scale: float = 1.0):
         super().__init__()
         self.width = width
         self.layers = layers
-        self.num_wsgm_modules = min(num_wsgm_modules, layers)
-        self.use_wsgm = [True for i in range(layers)]
+        self.num_adapter_modules = min(num_adapter_modules, layers)
+        self.use_adapter = [True for _ in range(layers)]
         # self.use_wsgm = [(i+1) % num_wsgm_modules == 0 for i in range(layers)]
         self.scale = scale
 
-        self.wsgm_out_dim = int(self.scale * (self.width // opt.WSGM_reduction_factor))
+        self.adapter_out_dim = int(self.scale * (self.width // opt.Adapter_reduction_factor))
 
-        self.WSGM_modules = nn.ModuleList([
-            WSGM(width, self.wsgm_out_dim)
-            for _ in range(num_wsgm_modules)
+        self.Adapter_modules = nn.ModuleList([
+            BasicAdapter(width, self.adapter_out_dim)
+            for _ in range(num_adapter_modules)
         ])
 
         self.resblocks = nn.Sequential(*[
@@ -257,15 +278,15 @@ class Transformer(nn.Module):
                 width,
                 heads,
                 attn_mask,
-                use_wsgm=self.use_wsgm[i],
-                wsgm_module=self._select_wsgm_module(i)
+                use_adapter=self.use_adapter[i],
+                adapter_module=self._select_adapter_module(i)
             )
             for i in range(layers)
         ])
 
-    def _select_wsgm_module(self, layer_idx: int):
-        wsgm_idx = (layer_idx * self.num_wsgm_modules) // self.layers
-        return self.WSGM_modules[wsgm_idx]
+    def _select_adapter_module(self, layer_idx: int):
+        adapter_idx = (layer_idx * self.num_adapter_modules) // self.layers
+        return self.Adapter_modules[adapter_idx]
 
     def forward(self, x: torch.Tensor):
         out = {}
@@ -273,6 +294,7 @@ class Transformer(nn.Module):
             x = layer(x)
             out[f'layer{idx}'] = x[0]
         return out, x
+
 class VisionTransformer(nn.Module):
     def __init__(self, input_resolution: int, patch_size: int, width: int, layers: int, heads: int, output_dim: int):
         super().__init__()
@@ -285,7 +307,7 @@ class VisionTransformer(nn.Module):
         self.positional_embedding = nn.Parameter(scale * torch.randn((input_resolution // patch_size) ** 2 + 1, width))
         self.ln_pre = LayerNorm(width)
 
-        self.transformer = Transformer(width, layers, heads, num_wsgm_modules=opt.WSGM_count)
+        self.transformer = Transformer(width, layers, heads, num_adapter_modules=opt.Adapter_count)
         # self.transformer = Transformer(width, layers, heads)
         self.ln_post = LayerNorm(width)
         self.proj = nn.Parameter(scale * torch.randn(width, output_dim))

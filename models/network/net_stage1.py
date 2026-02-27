@@ -17,7 +17,7 @@ class net_stage1(nn.Module):
         self.backbone, _ = clip.load('ViT-L/14', device='cpu')
         params = []
         for name, p in self.backbone.named_parameters():
-            if ("WSGM" in name and "visual" in name) or name == "fc.weight" or name == "fc.bias":
+            if ("Adapter_modules" in name and "visual" in name) or name == "fc.weight" or name == "fc.bias":
                 params.append(name)
             else:
                 p.requires_grad = False

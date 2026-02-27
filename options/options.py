@@ -22,8 +22,8 @@ class Options():
         parser.add_argument('--stage1_learning_rate', type=float, default=5e-5)
         parser.add_argument('--stage1_lr_decay_step', type=int, default=2)
         parser.add_argument('--stage1_lr_decay_factor', type=float, default=0.7)
-        parser.add_argument('--WSGM_count', type=int, default=12)
-        parser.add_argument('--WSGM_reduction_factor', type=int, default=4)
+        parser.add_argument('--Adapter_count', type=int, default=12)
+        parser.add_argument('--Adapter_reduction_factor', type=int, default=4)
 
         # Intermediate model path
         parser.add_argument('--intermediate_model_path', default='',
