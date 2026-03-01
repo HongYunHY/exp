@@ -2,6 +2,7 @@ import argparse
 
 class Options():
     def initialize(self, parser):
+        parser.add_argument('--lambdas', type=float, nargs='+')
         parser.add_argument('--experiment_name', default='my_experiment', help='the name of the experiment')
         parser.add_argument('--seed', type=int, default=3407)
         parser.add_argument('--num_workers', type=int, default=4)

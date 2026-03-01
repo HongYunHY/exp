@@ -92,7 +92,7 @@ if __name__ == '__main__':
 
                 with torch.no_grad():
                     if opt.eval_stage == 1:
-                        pre, _ = model(data)
+                        pre, _, _, _ = model(data)
                     else:
                         pre = model(data)
 

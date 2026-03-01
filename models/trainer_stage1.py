@@ -30,6 +30,44 @@ class Trainer_stage1:
 
         self.best_val_loss = float('inf')
 
+        self.lambdas = opt.lambdas
+
+    def shuffle_patches(self, data, patch_size):
+        batch_size, C, H, W = data.shape
+        assert H % patch_size == 0 and W % patch_size == 0
+
+        num_patches_h = H // patch_size
+        num_patches_w = W // patch_size
+        num_patches = num_patches_h * num_patches_w
+
+        # shape: [B, C, 14, 14, 16, 16]
+        patches = data.unfold(2, patch_size, patch_size).unfold(3, patch_size, patch_size)
+
+        # shape: [B, 196, C, 16, 16]
+        patches = patches.permute(0, 2, 3, 1, 4, 5).reshape(batch_size, num_patches, C, patch_size, patch_size)
+        
+        # idx shape: [B, 196]
+        idx = torch.stack([torch.randperm(num_patches) for _ in range(batch_size)]).to(data.device)
+
+        # [B, 196, C, 16, 16]
+        patches = patches[torch.arange(batch_size).unsqueeze(1), idx]
+
+        patches = patches.reshape(batch_size, num_patches_h, num_patches_w, C, patch_size, patch_size)
+        patches = patches.permute(0, 3, 1, 4, 2, 5).reshape(batch_size, C, H, W)
+
+        return patches
+
+    # 三块 cls 层面 L2 拉近，使用最后一层的 BCELoss，三块的 L2Loss
+    def setting1(self, data, mod_data, target, criterion):
+        result, differ_cls_tokens, cls_tokens, mod_cls_tokens = self.model(data, mod_data)
+        main_loss = criterion(result.squeeze(1), target.type(torch.float32))
+        # l2_loss : cls_tokens 与 mod_cls_tokens
+        l2_loss_items = []
+        for item in zip(cls_tokens, mod_cls_tokens):
+            l2_loss_items.append(torch.mean((item[0] - item[1]) ** 2))
+        l2_loss = sum(l2_loss_items)
+        return self.lambdas[0] * main_loss + self.lambdas[1] * l2_loss
+
     def train_epoch(self, dataloader: DataLoader, criterion):
         total_loss = 0.0
         total_batches = 0
@@ -42,11 +80,11 @@ class Trainer_stage1:
 
         for batch_idx, (data, target) in enumerate(tqdm(dataloader)):
             data, target = data.to(self.device), target.to(self.device)
+            mod_data = self.shuffle_patches(data, self.model.vision_patch_size)
             self.optimizer.zero_grad()
 
             with autocast():
-                output, _ = self.model(data)
-                loss = criterion(output.squeeze(1), target.type(torch.float32))
+                loss = self.setting1(data, mod_data, target, criterion)
 
             self.scaler.scale(loss).backward()
             self.scaler.step(self.optimizer)
@@ -71,7 +109,7 @@ class Trainer_stage1:
 
             with torch.no_grad():
                 with autocast():
-                    pre, _ = self.model(data)
+                    pre, _, _, _ = self.model(data)
                     loss = criterion(pre.squeeze(1), target.type(torch.float32))
                     running_loss += loss.item()
                     pre_prob = pre.cpu().numpy()

@@ -14,7 +14,7 @@ class net_stage1(nn.Module):
         super(net_stage1, self).__init__()
 
         # lode the frozen CLIP-ViT with wsgm trainable
-        self.backbone, _ = clip.load('ViT-L/14', device='cpu')
+        self.backbone, self.vision_patch_size, self.vision_width, self.embed_dim, _ = clip.load('ViT-L/14', device='cpu')
         params = []
         for name, p in self.backbone.named_parameters():
             if ("Adapter_modules" in name and "visual" in name) or name == "fc.weight" or name == "fc.bias":
@@ -30,9 +30,29 @@ class net_stage1(nn.Module):
             nn.Linear(dim, output_dim)
         )
 
-    def forward(self, x):
-        feature, cls_tokens = self.backbone.encode_image(x)
-        result = self.fc(feature)
-        return result, cls_tokens
+    def forward(self, x, mod_x=None):
+        return self.setting1(x, mod_x)
+
+    def setting1(self, x, mod_x=None):
+        cls_tokens, mod_cls_tokens = [], []
+        differ_cls_tokens = []
+
+        proj_result, tokens = self.backbone.encode_image(x)
+        if mod_x is not None:
+            mod_proj_result, mod_tokens = self.backbone.encode_image(mod_x)
+
+            keys = list(tokens.keys())
+            for idx in range(len(keys)):
+                cls_tokens.append(tokens[keys[idx]])
+                mod_cls_tokens.append(mod_tokens[keys[idx]])
+                differ_cls_token = tokens[keys[idx]] - mod_tokens[keys[idx]]
+                
+                differ_cls_tokens.append(differ_cls_token)
+
+            result = self.fc(proj_result - mod_proj_result)
+        else:
+            result = self.fc(proj_result)
+        
+        return result, differ_cls_tokens, cls_tokens, mod_cls_tokens
 
 

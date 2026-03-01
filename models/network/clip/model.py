@@ -292,7 +292,8 @@ class Transformer(nn.Module):
         out = {}
         for idx, layer in enumerate(self.resblocks.children()):
             x = layer(x)
-            out[f'layer{idx}'] = x[0]
+            if (idx+1) % (self.layers // 3) == 0:
+                out[f'layer{idx}'] = x
         return out, x
 
 class VisionTransformer(nn.Module):
@@ -328,19 +329,23 @@ class VisionTransformer(nn.Module):
 
         x = self.ln_post(x[:, 0, :])
 
-        cls_tokens = [self.ln_post(out['layer' + str(idx)]) @ self.proj for idx in range(len(out))]
+        cls_tokens = []
+        # new for three tokens deal
+        for key in out:
+            tmp = out[key].permute(1, 0, 2)
+            out[key] = self.ln_post(tmp[:, 0, :])
 
-        out['before_projection'] = x
+        # out['before_projection'] = x
 
         if self.proj is not None:
             x = x @ self.proj
-        out['after_projection'] = x
+        # out['after_projection'] = x
 
         # Return both intermediate features and final clip feature
         # return out
 
         # This only returns CLIP features
-        return x, cls_tokens
+        return x, out
 
 
 class CLIP(nn.Module):
@@ -540,4 +545,4 @@ def build_model(state_dict: dict):
     pretrained_dict = {k: v for k, v in state_dict.items() if k in model_dict and (v.shape == model_dict[k].shape)}
     model_dict.update(pretrained_dict)
     model.load_state_dict(model_dict, strict=False)
-    return model.eval()
+    return model.eval(), vision_patch_size, vision_width, embed_dim
