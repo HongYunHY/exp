@@ -1,9 +1,12 @@
 #!/bin/bash
 
-EXP_NAME="base_adapter"
+EXP_NAME="3bce_l2_setting"
+mkdir -p ./check_points/${EXP_NAME}
+echo "1 BCELoss And 0.047 L2Loss" >> ./check_points/${EXP_NAME}/evaluation_log.log
 
 # train stage 1
 python train.py \
+    --lambdas 1 0.047 \
     --experiment_name ${EXP_NAME} \
     --train_data_root ~/dataset/forgelens/GenImage/train \
     --val_data_root ~/dataset/forgelens/GenImage/val \
@@ -35,8 +38,5 @@ python evaluate.py \
     --eval_stage 1 \
     --Adapter_count 3 \
     --Adapter_reduction_factor 4 \
-    --FAFormer_layers 2 \
-    --FAFormer_reduction_factor 1 \
-    --FAFormer_head 2 \
     --num_workers 4 \
     --seed 3407

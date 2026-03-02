@@ -67,6 +67,17 @@ class Trainer_stage1:
             l2_loss_items.append(torch.mean((item[0] - item[1]) ** 2))
         l2_loss = sum(l2_loss_items)
         return self.lambdas[0] * main_loss + self.lambdas[1] * l2_loss
+    
+    # 三块 cls 层面 L2 拉近，使用三层的 BCELoss，三块的 L2Loss
+    def setting2(self, data, mod_data, target, criterion):
+        result, logits_by_differ_cls_tokens, cls_tokens, mod_cls_tokens = self.model(data, mod_data)
+        main_loss = sum([criterion(item.squeeze(1), target.type(torch.float32)) for item in logits_by_differ_cls_tokens])
+        # l2_loss : cls_tokens 与 mod_cls_tokens
+        l2_loss_items = []
+        for item in zip(cls_tokens, mod_cls_tokens):
+            l2_loss_items.append(torch.mean((item[0] - item[1]) ** 2))
+        l2_loss = sum(l2_loss_items)
+        return self.lambdas[0] * main_loss + self.lambdas[1] * l2_loss
 
     def train_epoch(self, dataloader: DataLoader, criterion):
         total_loss = 0.0
@@ -84,7 +95,7 @@ class Trainer_stage1:
             self.optimizer.zero_grad()
 
             with autocast():
-                loss = self.setting1(data, mod_data, target, criterion)
+                loss = self.setting2(data, mod_data, target, criterion)
 
             self.scaler.scale(loss).backward()
             self.scaler.step(self.optimizer)

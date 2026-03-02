@@ -337,8 +337,8 @@ class VisionTransformer(nn.Module):
 
         # out['before_projection'] = x
 
-        if self.proj is not None:
-            x = x @ self.proj
+        # if self.proj is not None:
+        #     x = x @ self.proj
         # out['after_projection'] = x
 
         # Return both intermediate features and final clip feature

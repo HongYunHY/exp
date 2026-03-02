@@ -30,8 +30,25 @@ class net_stage1(nn.Module):
             nn.Linear(dim, output_dim)
         )
 
+        # new
+        scale = self.vision_width ** -0.5
+
+        self.projs = nn.ParameterList([
+            nn.Parameter(scale * torch.randn(self.vision_width, self.embed_dim))
+            for _ in range(3)
+        ])
+
+        self.fcs = nn.ModuleList([
+            nn.Sequential(
+                nn.Dropout(drop_rate),
+                nn.Linear(dim, output_dim)
+            )
+            for _ in range(3)
+        ])
+
+
     def forward(self, x, mod_x=None):
-        return self.setting1(x, mod_x)
+        return self.setting2(x, mod_x)
 
     def setting1(self, x, mod_x=None):
         cls_tokens, mod_cls_tokens = [], []
@@ -54,5 +71,34 @@ class net_stage1(nn.Module):
             result = self.fc(proj_result)
         
         return result, differ_cls_tokens, cls_tokens, mod_cls_tokens
+    
+    def setting2(self, x, mod_x=None):
+        cls_tokens, mod_cls_tokens = [], []
+        differ_cls_tokens, logits_by_differ_cls_tokens = [], []
+
+        last_token, tokens = self.backbone.encode_image(x)
+        if mod_x is not None:
+            mod_last_token, mod_tokens = self.backbone.encode_image(mod_x)
+
+            keys = list(tokens.keys())
+            for idx in range(len(keys)):
+                cls_tokens.append(tokens[keys[idx]])
+                mod_cls_tokens.append(mod_tokens[keys[idx]])
+                differ_cls_token = tokens[keys[idx]] - mod_tokens[keys[idx]]
+                
+                differ_cls_tokens.append(differ_cls_token)
+                logits_by_differ_cls_tokens.append(
+                    self.fcs[idx](
+                        differ_cls_token @ self.projs[idx]
+                    )
+                )
+
+            result = logits_by_differ_cls_tokens[-1]
+        else:
+            result = self.fcs[-1](
+                last_token @ self.projs[-1]
+            )
+        
+        return result, logits_by_differ_cls_tokens, cls_tokens, mod_cls_tokens
 
 

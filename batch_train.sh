@@ -1,6 +1,6 @@
 #!/bin/bash
 
-EXP_NAME="l2_setting1"
+EXP_NAME="3bce_l2_setting1"
 mkdir -p ./check_points/${EXP_NAME}
 echo "1 BCELoss And 0.1 L2Loss" >> ./check_points/${EXP_NAME}/evaluation_log.log
 
@@ -41,7 +41,7 @@ python evaluate.py \
     --num_workers 4 \
     --seed 3407
 
-EXP_NAME="l2_setting2"
+EXP_NAME="3bce_l2_setting2"
 mkdir -p ./check_points/${EXP_NAME}
 echo "1 BCELoss And 0.05 L2Loss" >> ./check_points/${EXP_NAME}/evaluation_log.log
 
@@ -82,7 +82,7 @@ python evaluate.py \
     --num_workers 4 \
     --seed 3407
 
-EXP_NAME="l2_setting3"
+EXP_NAME="3bce_l2_setting3"
 mkdir -p ./check_points/${EXP_NAME}
 echo "1 BCELoss And 0.01 L2Loss" >> ./check_points/${EXP_NAME}/evaluation_log.log
 
