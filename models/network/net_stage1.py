@@ -1,5 +1,7 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
+
 from models.network.clip import clip
 
 
@@ -46,9 +48,13 @@ class net_stage1(nn.Module):
             for _ in range(3)
         ])
 
+        self.fc1 = nn.Linear(1024, 512)
+        self.fc2 = nn.Linear(512, 1)
+        self.fc3 = nn.Linear(3, 1)
+
 
     def forward(self, x, mod_x=None):
-        return self.setting2(x, mod_x)
+        return self.setting3(x, mod_x)
 
     def setting1(self, x, mod_x=None):
         cls_tokens, mod_cls_tokens = [], []
@@ -99,6 +105,44 @@ class net_stage1(nn.Module):
                 last_token @ self.projs[-1]
             )
         
+        return result, logits_by_differ_cls_tokens, cls_tokens, mod_cls_tokens
+
+    def setting3(self, x, mod_x=None):
+        cls_tokens, mod_cls_tokens = [], []
+        differ_cls_tokens, logits_by_differ_cls_tokens = [], []
+        if mod_x is not None:
+            last_token, tokens = self.backbone.encode_image(x)
+            mod_last_token, mod_tokens = self.backbone.encode_image(mod_x)
+
+            keys = list(tokens.keys())
+            for idx in range(len(keys)):
+                cls_tokens.append(tokens[keys[idx]])
+                mod_cls_tokens.append(mod_tokens[keys[idx]])
+                differ_cls_token = tokens[keys[idx]] - mod_tokens[keys[idx]]
+                
+                differ_cls_tokens.append(differ_cls_token)
+                logits_by_differ_cls_tokens.append(
+                    self.fcs[idx](
+                        differ_cls_token @ self.projs[idx]
+                    )
+                )
+            
+            stacked = torch.stack(differ_cls_tokens, dim=0)  # num_layers, batch_size, hidden_size
+
+            stacked = F.gelu(self.fc1(stacked))
+            stacked = self.fc2(stacked).squeeze().permute(1, 0)
+            result = self.fc3(stacked).view(-1).unsqueeze(1)
+        else:
+            last_token, tokens = self.backbone.encode_image(x)
+
+            cls = []
+            keys = list(tokens.keys())
+            for idx in range(len(keys)):
+                cls.append(tokens[keys[idx]])
+            tokens = torch.stack(cls, dim=0)
+            tokens = F.gelu(self.fc1(tokens))
+            tokens = self.fc2(tokens).squeeze().permute(1, 0)
+            result = self.fc3(tokens).view(-1).unsqueeze(1)
         return result, logits_by_differ_cls_tokens, cls_tokens, mod_cls_tokens
 
 
