@@ -15,6 +15,12 @@ class net_stage1(nn.Module):
     def __init__(self, dim=768, drop_rate=0.5, output_dim=1):
         super(net_stage1, self).__init__()
 
+        self.align_attn = nn.MultiheadAttention(
+            embed_dim=1024,
+            num_heads=8,
+            batch_first=True
+        )
+
         # lode the frozen CLIP-ViT with wsgm trainable
         self.backbone, self.vision_patch_size, self.vision_width, self.embed_dim, _ = clip.load('ViT-L/14', device='cpu')
         params = []
@@ -25,7 +31,7 @@ class net_stage1(nn.Module):
                 p.requires_grad = False
         print(params)
 
-        self.ln_post = LayerNorm(dim)
+        # self.ln_post = LayerNorm(dim)
 
         self.fc = nn.Sequential(
             nn.Dropout(drop_rate),
@@ -40,6 +46,10 @@ class net_stage1(nn.Module):
             for _ in range(3)
         ])
 
+        self.fc1 = nn.Linear(1024, 512)
+        self.fc2 = nn.Linear(512, 1)
+        self.fc3 = nn.Linear(3, 1)
+
         self.fcs = nn.ModuleList([
             nn.Sequential(
                 nn.Dropout(drop_rate),
@@ -48,18 +58,8 @@ class net_stage1(nn.Module):
             for _ in range(3)
         ])
 
-        self.fc1 = nn.Linear(1024, 512)
-        self.fc2 = nn.Linear(512, 1)
-        self.fc3 = nn.Linear(3, 1)
-
-        self.align_attn = nn.MultiheadAttention(
-            embed_dim=1024,
-            num_heads=8,
-            batch_first=True
-        )
-
     def forward(self, x, mod_x=None):
-        return self.attn_setting(x, mod_x)
+        return self.setting3(x, mod_x)
 
     def setting1(self, x, mod_x=None):
         cls_tokens, mod_cls_tokens = [], []

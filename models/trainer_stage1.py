@@ -89,8 +89,8 @@ class Trainer_stage1:
         for item in zip(cls_tokens, mod_cls_tokens):
             l2_loss_items.append(torch.mean((item[0] - item[1]) ** 2))
         l2_loss = sum(l2_loss_items)
-        # return self.lambdas[0] * main_loss + self.lambdas[1] * l2_loss + new_loss
-        return self.lambdas[1] * l2_loss + new_loss
+        return self.lambdas[0] * main_loss + self.lambdas[1] * l2_loss + new_loss
+        # return self.lambdas[1] * l2_loss + new_loss
 
     def train_epoch(self, dataloader: DataLoader, criterion):
         total_loss = 0.0
