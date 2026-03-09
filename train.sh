@@ -1,12 +1,12 @@
 #!/bin/bash
 
-EXP_NAME="3bce_l2_setting"
+EXP_NAME="l2_attn_newbce_setting1"
 mkdir -p ./check_points/${EXP_NAME}
-echo "1 BCELoss And 0.047 L2Loss" >> ./check_points/${EXP_NAME}/evaluation_log.log
+echo "1 BCELoss And 0.1 L2Loss" >> ./check_points/${EXP_NAME}/evaluation_log.log
 
 # train stage 1
 python train.py \
-    --lambdas 1 0.047 \
+    --lambdas 1 0.1 \
     --experiment_name ${EXP_NAME} \
     --train_data_root ~/dataset/forgelens/GenImage/train \
     --val_data_root ~/dataset/forgelens/GenImage/val \

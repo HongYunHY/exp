@@ -52,9 +52,14 @@ class net_stage1(nn.Module):
         self.fc2 = nn.Linear(512, 1)
         self.fc3 = nn.Linear(3, 1)
 
+        self.align_attn = nn.MultiheadAttention(
+            embed_dim=1024,
+            num_heads=8,
+            batch_first=True
+        )
 
     def forward(self, x, mod_x=None):
-        return self.setting3(x, mod_x)
+        return self.attn_setting(x, mod_x)
 
     def setting1(self, x, mod_x=None):
         cls_tokens, mod_cls_tokens = [], []
@@ -126,6 +131,48 @@ class net_stage1(nn.Module):
                         differ_cls_token @ self.projs[idx]
                     )
                 )
+            
+            stacked = torch.stack(differ_cls_tokens, dim=0)  # num_layers, batch_size, hidden_size
+
+            stacked = F.gelu(self.fc1(stacked))
+            stacked = self.fc2(stacked).squeeze().permute(1, 0)
+            result = self.fc3(stacked).view(-1).unsqueeze(1)
+        else:
+            last_token, tokens = self.backbone.encode_image(x)
+
+            cls = []
+            keys = list(tokens.keys())
+            for idx in range(len(keys)):
+                cls.append(tokens[keys[idx]])
+            tokens = torch.stack(cls, dim=0)
+            tokens = F.gelu(self.fc1(tokens))
+            tokens = self.fc2(tokens).squeeze().permute(1, 0)
+            result = self.fc3(tokens).view(-1).unsqueeze(1)
+        return result, logits_by_differ_cls_tokens, cls_tokens, mod_cls_tokens
+    
+    def attn_setting(self, x, mod_x=None):
+        cls_tokens, mod_cls_tokens = [], []
+        differ_cls_tokens, logits_by_differ_cls_tokens = [], []
+        if mod_x is not None:
+            last_token, tokens = self.backbone.encode_image(x)
+            mod_last_token, mod_tokens = self.backbone.encode_image(mod_x)
+
+            keys = list(tokens.keys())
+            for idx in range(len(keys)):
+                cls_tokens.append(tokens[keys[idx]])
+                mod_cls_tokens.append(mod_tokens[keys[idx]])
+                cls = tokens[keys[idx]].unsqueeze(1)      # [B, 1, D]
+                shf_cls = mod_tokens[keys[idx]].unsqueeze(1)
+
+                aligned_shf, _ = self.align_attn(
+                    query=cls,
+                    key=shf_cls,
+                    value=shf_cls
+                )
+
+                differ_cls_token = cls.squeeze(1) - aligned_shf.squeeze(1)
+                differ_cls_tokens.append(differ_cls_token)
+                
             
             stacked = torch.stack(differ_cls_tokens, dim=0)  # num_layers, batch_size, hidden_size
 
